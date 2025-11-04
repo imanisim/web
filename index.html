@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Arqwell | Let’s Arq Well</title>
+
+    <!-- Arvo font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Arvo:wght@400;700&display=swap"
+    />
+
+    <!-- Tailwind (CDN) -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+    />
+
+    <!-- React + ReactDOM + Babel -->
+    <script
+      crossorigin
+      src="https://unpkg.com/react@18/umd/react.development.js"
+    ></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+    ></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="bg-white">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useEffect, useRef, useState } = React;
+
+      /**************************************
+       * 1) VIDEO POPUP WITH "COMING SOON"
+       **************************************/
+      function ArqwellVideoPopup({
+        open = true,
+        onClose = () => {},
+        library = DEFAULT_LIBRARY,
+        brand = "#FF2E2E",
+        fontFamily = "Arvo, system-ui, sans-serif",
+        startOrgIndex = 0,
+        startVideoIndex = 0,
+      }) {
+        const [phase, setPhase] = useState("intro");
+        const [orgIdx, setOrgIdx] = useState(startOrgIndex);
+        const [vidIdx, setVidIdx] = useState(startVideoIndex);
+        const [videoError, setVideoError] = useState(false);
+        const videoRef = useRef(null);
+
+        const currentOrg = library[orgIdx] || { org: "Arqwell", videos: [] };
+        const current = currentOrg.videos[vidIdx] || {};
+
+        const host = current.host || currentOrg.org || "Arqwell";
+        const eventTitle = current.title || "Session";
+        const eventUrl = current.eventUrl || "https://arqwell.org/events";
+        const tagline = current.tagline || "Let’s Arq Well.";
+
+        // Animation phases
+        useEffect(() => {
+          if (!open) return;
+          setPhase("intro");
+          setVideoError(false); // reset error when switching
+          const t1 = setTimeout(() => setPhase("image"), 500);
+          const t2 = setTimeout(() => setPhase("tagline"), 2500);
+          const t3 = setTimeout(() => setPhase("outro"), 5000);
+          return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+          };
+        }, [open, orgIdx, vidIdx]);
+
+        const onEnded = () => nextVideo();
+        const onVideoError = () => setVideoError(true);
+
+        // Navigation helpers
+        const prevVideo = () => {
+          if (!library.length) return;
+          let o = orgIdx,
+            v = vidIdx - 1;
+          if (v < 0) {
+            o = (orgIdx - 1 + library.length) % library.length;
+            v =
+              (library[o].videos.length - 1 + library[o].videos.length) %
+              library[o].videos.length;
+          }
+          setOrgIdx(o);
+          setVidIdx(v);
+        };
+
+        const nextVideo = () => {
+          if (!library.length) return;
+          let o = orgIdx,
+            v = vidIdx + 1;
+          if (v >= library[o].videos.length) {
+            o = (orgIdx + 1) % library.length;
+            v = 0;
+          }
+          setOrgIdx(o);
+          setVidIdx(v);
+        };
+
+        const skip = (secs) => {
+          const el = videoRef.current;
+          if (!el) return;
+          el.currentTime = Math.max(
+            0,
+            Math.min((el.currentTime || 0) + secs, el.duration || 1e9)
+          );
+        };
+
+        // Keyboard shortcuts
+        useEffect(() => {
+          if (!open) return;
+          const onKey = (e) => {
+            if (e.key === "ArrowLeft") skip(-10);
+            if (e.key === "ArrowRight") skip(10);
+            if (e.key.toLowerCase() === "j") skip(-10);
+            if (e.key.toLowerCase() === "l") skip(10);
+            if (e.key.toLowerCase() === "k") {
+              const el = videoRef.current;
+              if (!el) return;
+              el.paused ? el.play() : el.pause();
+            }
+            if (e.key === "PageUp") prevVideo();
+            if (e.key === "PageDown") nextVideo();
+            if (e.key === "Escape") onClose();
+          };
+          window.addEventListener("keydown", onKey);
+          return () => window.removeEventListener("keydown", onKey);
+        }, [open, orgIdx, vidIdx]);
+
+        if (!open) return null;
+
+        // Safe domain display helper
+        let eventDomain;
+        try {
+          eventDomain = new URL(eventUrl).hostname + "/events";
+        } catch {
+          eventDomain = "arqwell.org/events";
+        }
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-70">
+            <style>{`
+              @keyframes fadeUp { from { opacity: 0; transform: translateY(20px);} to {opacity: 1; transform: translateY(0);} }
+              @keyframes slideInRibbon { from { transform: translateY(100%);} to { transform: translateY(0);} }
+              @keyframes fadeInWatermark { from {opacity: 0;} to {opacity: .4;} }
+              @keyframes fadeToBrand { from { background-color: transparent;} to { background-color: ${brand};} }
+            `}</style>
+
+            <div className="relative w-[96vw] max-w-6xl rounded-2xl overflow-hidden bg-neutral-900">
+              {/* Close */}
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className="absolute right-3 top-3 z-50 rounded-full bg-white bg-opacity-80 px-3 py-1 text-[13px] font-medium text-black hover:bg-white"
+              >
+                Close
+              </button>
+
+              {/* Video + overlay */}
+              <div className="relative bg-black" style={{ aspectRatio: "16/9" }}>
+                <video
+                  ref={videoRef}
+                  src={current.src}
+                  poster={current.poster}
+                  controls
+                  autoPlay
+                  onEnded={onEnded}
+                  onError={onVideoError}
+                  className="h-full w-full object-contain bg-black"
+                />
+
+                {/* If video fails, show COMING SOON */}
+                {videoError && (
+                  <div className="pointer-events-none absolute inset-0 z-40 flex flex-col items-center justify-center bg-black bg-opacity-80 px-6 text-center">
+                    <p
+                      className="mb-2 text-2xl font-semibold text-white md:text-3xl"
+                      style={{ fontFamily }}
+                    >
+                      Video coming soon
+                    </p>
+                    <p className="max-w-md text-sm text-slate-200 md:text-base">
+                      This session is not uploaded yet. Check back later or
+                      follow us at{" "}
+                      <span className="font-semibold">arqwell.org/events</span>
+                      .
+                    </p>
+                  </div>
+                )}
+
+                {/* Watermark */}
+                <div
+                  style={{ color: brand, fontFamily }}
+                  className={`pointer-events-none absolute right-4 top-4 z-30 text-2xl md:text-3xl font-bold opacity-40 ${
+                    phase === "image" ||
+                    phase === "tagline" ||
+                    phase === "outro"
+                      ? "animate-[fadeInWatermark_1.2s_ease-out_forwards]"
+                      : "opacity-0"
+                  }`}
+                >
+                  Arqwell
+                </div>
+
+                {/* Tagline */}
+                <div
+                  style={{ fontFamily }}
+                  className={`pointer-events-none absolute bottom-[16%] left-1/2 z-30 -translate-x-1/2 text-center text-white drop-shadow-md text-2xl md:text-4xl ${
+                    phase === "tagline"
+                      ? "animate-[fadeUp_0.8s_ease-out_forwards]"
+                      : "opacity-0"
+                  }`}
+                >
+                  {tagline}
+                </div>
+
+                {/* Bottom ribbon */}
+                <div
+                  style={{ backgroundColor: brand, fontFamily }}
+                  className={`absolute bottom-0 left-0 z-40 w-full text-white py-2.5 px-4 md:py-3 md:px-6 flex flex-col md:flex-row md:items-center md:justify-between text-sm md:text-base ${
+                    phase === "tagline" || phase === "outro"
+                      ? "animate-[slideInRibbon_0.7s_ease-out_forwards]"
+                      : "opacity-0"
+                  }`}
+                >
+                  <div className="truncate">
+                    Hosted by <strong>{host}</strong> | Building Leadership in
+                    Architecture
+                  </div>
+                  <div className="mt-1 truncate md:mt-0 md:pl-3">
+                    <span className="font-semibold">{eventTitle}</span>
+                    <span className="mx-2">|</span>
+                    <a
+                      href={eventUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline font-semibold"
+                    >
+                      {eventDomain}
+                    </a>
+                  </div>
+                </div>
+
+                {/* Outro tint */}
+                <div
+                  className={`pointer-events-none absolute inset-0 z-20 ${
+                    phase === "outro"
+                      ? "animate-[fadeToBrand_1.6s_ease-in_forwards]"
+                      : ""
+                  }`}
+                />
+
+                {/* Controls row */}
+                <div className="absolute inset-x-0 bottom-14 z-40 flex items-center justify-center gap-2 md:gap-3">
+                  <button
+                    onClick={prevVideo}
+                    className="rounded-full bg-white bg-opacity-80 px-3 py-1 text-sm font-medium text-black hover:bg-white"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={() => skip(-10)}
+                    className="rounded-full bg-white bg-opacity-80 px-3 py-1 text-sm font-medium text-black hover:bg-white"
+                  >
+                    ⟲ 10s
+                  </button>
+                  <button
+                    onClick={() => skip(10)}
+                    className="rounded-full bg-white bg-opacity-80 px-3 py-1 text-sm font-medium text-black hover:bg-white"
+                  >
+                    10s ⟳
+                  </button>
+                  <button
+                    onClick={nextVideo}
+                    className="rounded-full bg-white bg-opacity-80 px-3 py-1 text-sm font-medium text-black hover:bg-white"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              {/* Playlist footer */}
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 bg-neutral-950 text-white text-opacity-90 p-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm opacity-80">Organization:</label>
+                  <select
+                    value={orgIdx}
+                    onChange={(e) => {
+                      setOrgIdx(parseInt(e.target.value, 10));
+                      setVidIdx(0);
+                    }}
+                    className="bg-neutral-800 border border-neutral-700 rounded-md px-2 py-1 text-sm"
+                  >
+                    {library.map((g, i) => (
+                      <option key={g.org + i} value={i}>
+                        {g.org}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <label className="text-sm opacity-80">Session:</label>
+                  <div className="flex gap-2 overflow-x-auto w-full md:max-w-[70%]">
+                    {currentOrg.videos.map((v, i) => (
+                      <button
+                        key={(v.src || v.title) + i}
+                        onClick={() => setVidIdx(i)}
+                        className={`whitespace-nowrap rounded-md px-3 py-1 text-sm border ${
+                          i === vidIdx
+                            ? "bg-white text-black border-white"
+                            : "bg-neutral-800 text-white border-neutral-700 hover:bg-neutral-700"
+                        }`}
+                        title={v.title || "Session"}
+                      >
+                        {v.title
+                          ? v.title.length > 24
+                            ? v.title.slice(0, 24) + "…"
+                            : v.title
+                          : `Video ${i + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      /**************************************
+       * 2) SITE PREVIEW SHELL
+       **************************************/
+      function SitePreview() {
+        const [open, setOpen] = useState(false);
+        const [library] = useState(DEFAULT_LIBRARY);
+        const [startOrg, setStartOrg] = useState(0);
+        const [startVid, setStartVid] = useState(0);
+
+        return (
+          <div className="min-h-screen bg-white text-slate-900">
+            {/* Top bar */}
+            <header className="sticky top-0 z-40 border-b border-slate-200 bg-white bg-opacity-90 backdrop-blur">
+              <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-lg bg-red-500"></div>
+                  <span
+                    className="font-bold tracking-tight"
+                    style={{ fontFamily: "Arvo, system-ui, sans-serif" }}
+                  >
+                    Arqwell
+                  </span>
+                </div>
+                <nav className="hidden gap-6 md:flex">
+                  <a className="hover:text-red-500" href="#programs">
+                    Programs
+                  </a>
+                  <a className="hover:text-red-500" href="#tech">
+                    AI + 5D BIM
+                  </a>
+                  <a className="hover:text-red-500" href="#media">
+                    Media
+                  </a>
+                  <a className="hover:text-red-500" href="#partners">
+                    Partners
+                  </a>
+                </nav>
+                <button
+                  onClick={() => {
+                    setStartOrg(0);
+                    setStartVid(0);
+                    setOpen(true);
+                  }}
+                  className="rounded-xl bg-red-500 px-4 py-2 text-white hover:opacity-90"
+                >
+                  Watch Sessions
+                </button>
+              </div>
+            </header>
+
+            {/* Hero */}
+            <section className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-4 py-14 md:grid-cols-2">
+              <div>
+                <h1
+                  className="text-4xl font-bold md:text-5xl"
+                  style={{ fontFamily: "Arvo, system-ui, sans-serif" }}
+                >
+                  Let’s Arq Well.
+                </h1>
+                <p className="mt-4 max-w-xl text-lg text-slate-600">
+                  Leadership and technology training for the next generation of
+                  AEC. We film, produce, and share sessions focused on AI
+                  integration, 5D BIM, and practice leadership.
+                </p>
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => {
+                      setStartOrg(0);
+                      setStartVid(0);
+                      setOpen(true);
+                    }}
+                    className="rounded-xl bg-red-500 px-5 py-2.5 text-white hover:opacity-90"
+                  >
+                    Play Intro
+                  </button>
+                  <a
+                    href="#programs"
+                    className="rounded-xl border border-slate-300 px-5 py-2.5 hover:border-slate-400"
+                  >
+                    Explore Programs
+                  </a>
+                </div>
+              </div>
+              <div className="relative w-full overflow-hidden rounded-2xl border border-slate-200 shadow-sm">
+                <div
+                  className="bg-gray-100 flex items-center justify-center text-center text-slate-500"
+                  style={{ aspectRatio: "16/9" }}
+                >
+                  Add your preview image here
+                </div>
+                <div className="absolute bottom-3 right-3 rounded bg-white bg-opacity-80 px-3 py-1 text-sm">
+                  Preview
+                </div>
+              </div>
+            </section>
+
+            {/* Programs grid */}
+            <section
+              id="programs"
+              className="mx-auto max-w-7xl px-4 py-12"
+            >
+              <h2
+                className="mb-6 text-2xl font-semibold"
+                style={{ fontFamily: "Arvo, system-ui, sans-serif" }}
+              >
+                Upcoming &amp; Featured Sessions
+              </h2>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+                {DEFAULT_LIBRARY.flatMap((group, gi) =>
+                  group.videos.map((v, vi) => (
+                    <div
+                      key={`${group.org}-${vi}`}
+                      className="group overflow-hidden rounded-2xl border border-slate-200 shadow-sm"
+                    >
+                      <div className="relative w-full overflow-hidden bg-black">
+                        <div
+                          className="h-full w-full opacity-80 transition group-hover:opacity-100 bg-cover bg-center"
+                          style={{
+                            aspectRatio: "16/9",
+                            backgroundImage: v.poster
+                              ? `url(${v.poster})`
+                              : "none",
+                          }}
+                        ></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black bg-opacity-60 to-transparent"></div>
+                        <div className="absolute bottom-2 left-3 right-3 text-white">
+                          <div className="text-xs uppercase tracking-wide opacity-80">
+                            {group.org}
+                          </div>
+                          <div className="truncate text-lg font-semibold">
+                            {v.title || "Session"}
+                          </div>
+                        </div>
+                        {v.comingSoon && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 text-center text-sm text-white">
+                            Video coming soon
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between px-3 py-3">
+                        <button
+                          onClick={() => {
+                            setStartOrg(gi);
+                            setStartVid(vi);
+                            setOpen(true);
+                          }}
+                          className="rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white hover:opacity-90"
+                        >
+                          Watch
+                        </button>
+                        <a
+                          href={v.eventUrl || "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sm text-slate-600 hover:text-slate-900"
+                        >
+                          Details →
+                        </a>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            {/* Tech section */}
+            <section
+              id="tech"
+              className="mx-auto max-w-7xl px-4 py-12"
+            >
+              <h2
+                className="mb-3 text-2xl font-semibold"
+                style={{ fontFamily: "Arvo, system-ui, sans-serif" }}
+              >
+                AI + 5D BIM
+              </h2>
+              <p className="max-w-3xl text-slate-600">
+                From Dynamo/Grasshopper automation to cost &amp; schedule
+                integration, Arqwell helps teams adopt AI-enhanced workflows
+                that are practical, testable, and aligned with project
+                delivery.
+              </p>
+            </section>
+
+            {/* Media section */}
+            <section
+              id="media"
+              className="mx-auto max-w-7xl px-4 py-12"
+            >
+              <h2
+                className="mb-3 text-2xl font-semibold"
+                style={{ fontFamily: "Arvo, system-ui, sans-serif" }}
+              >
+                Knowledge &amp; Media
+              </h2>
+              <p className="max-w-3xl text-slate-600">
+                We publish highlight reels, full sessions, and short explainers.
+                Join the newsletter to get new episodes and training drops.
+              </p>
+            </section>
+
+            {/* Footer */}
+            <footer className="border-t border-slate-200 bg-white bg-opacity-70">
+              <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-6 text-sm text-slate-600">
+                <div>
+                  © {new Date().getFullYear()} Arqwell. All rights reserved.
+                </div>
+                <a
+                  href="https://arqwell.org/events"
+                  className="hover:text-red-500"
+                >
+                  arqwell.org/events
+                </a>
+              </div>
+            </footer>
+
+            {/* Popup */}
+            {open && (
+              <ArqwellVideoPopup
+                open={open}
+                onClose={() => setOpen(false)}
+                library={library}
+                brand="#FF2E2E"
+                fontFamily="Arvo, system-ui, sans-serif"
+                startOrgIndex={startOrg}
+                startVideoIndex={startVid}
+              />
+            )}
+          </div>
+        );
+      }
+
+      /**************************************
+       * 3) PLAYLIST DATA
+       **************************************/
+      const DEFAULT_LIBRARY = [
+        {
+          org: "Arqwell",
+          videos: [
+            {
+              // TODO: REPLACE WITH YOUR REAL VIDEO PATH
+              // Example: "videos/arqwell_intro.mp4"
+              src: "/videos/sample1.mp4",
+              title: "Welcome to Arqwell",
+              host: "Arqwell",
+              eventUrl: "https://arqwell.org/events",
+              tagline: "Let’s Arq Well.",
+              // TODO: REPLACE WITH YOUR REAL POSTER IMAGE
+              poster: "/videos/poster1.jpg",
+              comingSoon: true, // shows overlay even before upload
+            },
+            {
+              src: "/videos/sample2.mp4",
+              title: "AI + 5D BIM Training (Part 1)",
+              host: "Arqwell",
+              eventUrl: "https://arqwell.org/events",
+              tagline: "Training the next generation",
+              poster: "/videos/poster2.jpg",
+              comingSoon: true,
+            },
+          ],
+        },
+        {
+          org: "DLR Group",
+          videos: [
+            {
+              src: "/videos/dlr_bd_guild.mp4",
+              title: "Business Development for AEC",
+              host: "DLR Group",
+              eventUrl: "https://arqwell.org/events",
+              comingSoon: true,
+            },
+          ],
+        },
+        {
+          org: "NOMA Colorado",
+          videos: [
+            {
+              src: "/videos/project_pipeline.mp4",
+              title: "Project Pipeline Highlights",
+              host: "NOMA Colorado",
+              eventUrl: "https://arqwell.org/events",
+              comingSoon: true,
+            },
+          ],
+        },
+      ];
+
+      // Mount app
+      const root = ReactDOM.createRoot(document.getElementById("root"));
+      root.render(<SitePreview />);
+    </script>
+  </body>
+</html>
